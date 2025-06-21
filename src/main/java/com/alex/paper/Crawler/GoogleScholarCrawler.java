@@ -31,7 +31,7 @@ public class GoogleScholarCrawler {
             driverInitialized = true;
         } catch (Exception e) {
             System.err.println("ChromeDriver 初始化失敗: " + e.getMessage());
-            System.err.println("將使用 Jsoup 進行爬取（功能可能受限）");
+            System.err.println("沒有找到ChromeDriver");
             driverInitialized = false;
         }
     }

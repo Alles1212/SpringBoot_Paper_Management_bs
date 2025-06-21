@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>論文管理系統 - 爬蟲測試</title>
     <style>
         body {
@@ -85,6 +88,14 @@
             color: #666;
             font-style: italic;
         }
+        .success {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .error {
+            color: #dc3545;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -111,14 +122,6 @@
             <input type="number" id="yearTo" min="1900" max="2024" placeholder="例如：2024">
         </div>
         
-        <div class="form-group">
-            <label for="sortBy">排序方式：</label>
-            <select id="sortBy">
-                <option value="relevance">相關性</option>
-                <option value="date">日期</option>
-            </select>
-        </div>
-        
         <button onclick="crawlPapers()">爬取論文</button>
         <button onclick="crawlAndSave()">爬取並儲存</button>
         <button onclick="testCrawler()">測試爬蟲</button>
@@ -132,20 +135,24 @@
     <script>
         async function crawlPapers() {
             const request = buildRequest();
-            await callAPI('/crawler/google-scholar', request, '爬取論文');
+            await callAPI('/api/crawler/crawl', request, '爬取論文');
         }
         
         async function crawlAndSave() {
             const request = buildRequest();
-            await callAPI('/crawler/google-scholar/save', request, '爬取並儲存論文');
+            await callAPI('/api/crawler/crawl-and-save', request, '爬取並儲存論文');
         }
         
         async function testCrawler() {
             showLoading('測試爬蟲中...');
             try {
-                const response = await fetch('/crawler/test');
-                const result = await response.text();
-                showResult(result);
+                const response = await fetch('/api/crawler/health');
+                const result = await response.json();
+                if (result.success) {
+                    showResult('爬蟲服務正常運作！Python 爬蟲狀態：' + (result.pythonCrawlerHealthy ? '正常' : '異常'));
+                } else {
+                    showResult('爬蟲服務異常：' + result.error);
+                }
             } catch (error) {
                 showResult('測試失敗：' + error.message);
             }
@@ -156,13 +163,12 @@
                 keyword: document.getElementById('keyword').value,
                 maxResults: parseInt(document.getElementById('maxResults').value),
                 yearFrom: document.getElementById('yearFrom').value ? parseInt(document.getElementById('yearFrom').value) : null,
-                yearTo: document.getElementById('yearTo').value ? parseInt(document.getElementById('yearTo').value) : null,
-                sortBy: document.getElementById('sortBy').value
+                yearTo: document.getElementById('yearTo').value ? parseInt(document.getElementById('yearTo').value) : null
             };
         }
         
         async function callAPI(endpoint, request, action) {
-            showLoading(action + '中...');
+            showLoading(action + '中...<br><small>API: ' + endpoint + '</small>');
             try {
                 const response = await fetch(endpoint, {
                     method: 'POST',
@@ -173,13 +179,18 @@
                 });
                 
                 if (response.ok) {
-                    const papers = await response.json();
-                    showPapers(papers);
+                    const result = await response.json();
+                    if (result.success) {
+                        showPapers(result.papers, result.message);
+                    } else {
+                        showResult('❌ ' + action + '失敗：' + result.error + '<br><small>API: ' + endpoint + '</small>');
+                    }
                 } else {
-                    showResult('請求失敗：' + response.status);
+                    const text = await response.text();
+                    showResult('❌ 請求失敗：HTTP ' + response.status + '<br><small>API: ' + endpoint + '</small><br>Response: ' + text);
                 }
             } catch (error) {
-                showResult('錯誤：' + error.message);
+                showResult('❌ 錯誤：' + error.message + '<br><small>API: ' + endpoint + '</small>');
             }
         }
         
@@ -193,16 +204,22 @@
             document.getElementById('papersList').innerHTML = '<div class="loading">' + message + '</div>';
         }
         
-        function showPapers(papers) {
+        function showPapers(papers, message) {
             document.getElementById('result').style.display = 'block';
             const papersList = document.getElementById('papersList');
             
-            if (papers.length === 0) {
-                papersList.innerHTML = '<div class="loading">沒有找到相關論文</div>';
+            let html = '';
+            if (message) {
+                html += '<div class="success">' + message + '</div><br>';
+            }
+            
+            if (!papers || papers.length === 0) {
+                html += '<div class="loading">沒有找到相關論文</div>';
+                papersList.innerHTML = html;
                 return;
             }
             
-            let html = '<p>找到 ' + papers.length + ' 篇論文：</p>';
+            html += '<p>找到 ' + papers.length + ' 篇論文：</p>';
             papers.forEach((paper, idx) => {
                 html += `
                     <div class="paper-item">
@@ -211,7 +228,7 @@
                         <div><b>期刊：</b>${paper.journal || '無'}</div>
                         <div><b>出版年份：</b>${paper.year || '無'}</div>
                         <div class="paper-abstract">${paper.abstractText || '無摘要'}</div>
-                        <button onclick="saveSinglePaper(${idx})">儲存</button>
+                        <button onclick="saveSinglePaper(${idx})">儲存此論文</button>
                     </div>
                 `;
             });
@@ -220,24 +237,34 @@
         }
 
         async function saveSinglePaper(idx) {
-            const paper = document.getElementById('papersList').papers[idx] || null;
             const papers = document.getElementById('papersList').papers;
+            if (!papers || !papers[idx]) {
+                alert('論文資料不存在');
+                return;
+            }
+            
             const singlePaper = papers[idx];
             try {
-                const response = await fetch('/crawler/save-selected', {
+                const response = await fetch('/api/crawler/save-selected', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify([singlePaper])
                 });
+                
                 if (response.ok) {
-                    alert('儲存成功！');
+                    const result = await response.json();
+                    if (result.success) {
+                        alert('✅ 儲存成功！' + result.message);
+                    } else {
+                        alert('❌ 儲存失敗：' + result.error);
+                    }
                 } else {
-                    alert('儲存失敗');
+                    alert('❌ 儲存失敗：HTTP ' + response.status);
                 }
             } catch (e) {
-                alert('儲存失敗：' + e.message);
+                alert('❌ 儲存失敗：' + e.message);
             }
         }
     </script>

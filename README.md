@@ -50,6 +50,17 @@ paper-management-system
 ├── docker-compose.yml                                   // Docker Compose 配置
 └── pom.xml
 ```
+┌─────────────────┐    HTTP/REST    ┌─────────────────┐
+│   Spring Boot   │ ◄──────────────► │  Python Crawler │
+│   Application   │                 │   Microservice  │
+└─────────────────┘                 └─────────────────┘
+         │                                    │
+         │                                    │
+         ▼                                    ▼
+┌─────────────────┐                 ┌─────────────────┐
+│   MySQL DB      │                 │  BeautifulSoup  │
+└─────────────────┘                 │  + Requests     │
+
 ## Configuration
 - Language : Java
 - Database : MySQL
@@ -68,7 +79,7 @@ CREATE TABLE paper (
 1. **clone the repo** : ```git clone https://github.com/Alles1212/Springboot-Paper-Management.git```
 2. **start services** : ```docker-compose up --build```
 3. **access the system** : entry ```http://localhost:8080```
-4. **check MySQL** : ```docker exec -it mysql-db mysql -uroot -pspringboot myjdbc``` then ```show tables;```(whether table named `paper` exist) then ```select * from paper```(if no data in it, will be empty)
+4. **check MySQL** : ```docker exec -it paper-management-mysql mysql -uroot -proot paper_management``` then ```show tables;```(whether table named `paper` exist) then ```select * from paper```(if no data in it, will be empty)
 ## Notice
 ### Law
 - follow Google Scholar usage

@@ -8,61 +8,173 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
 
 @RestController
-@RequestMapping("/crawler")
+@RequestMapping("/api/crawler")
 @CrossOrigin(origins = "*")
 public class CrawlerController {
 
     @Autowired
     private CrawlerService crawlerService;
 
-    // 爬取 Google Scholar 論文（不儲存到資料庫）
-    @PostMapping("/google-scholar")
-    public ResponseEntity<List<Paper>> crawlGoogleScholar(@RequestBody CrawlerRequest request) {
+    @PostMapping("/crawl")
+    public ResponseEntity<Map<String, Object>> crawlPapers(@RequestBody CrawlerRequest request) {
         try {
             List<Paper> papers = crawlerService.crawlGoogleScholar(request);
-            return ResponseEntity.ok(papers);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("papers", papers);
+            response.put("count", papers.size());
+            response.put("keyword", request.getKeyword());
+            
+            return ResponseEntity.ok(response);
+            
         } catch (Exception e) {
-            e.printStackTrace();
-            return ResponseEntity.internalServerError().build();
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", e.getMessage());
+            
+            return ResponseEntity.badRequest().body(response);
         }
     }
 
-    // 爬取 Google Scholar 論文並儲存到資料庫
-    @PostMapping("/google-scholar/save")
-    public ResponseEntity<List<Paper>> crawlAndSaveGoogleScholar(@RequestBody CrawlerRequest request) {
+    @PostMapping("/crawl-and-save")
+    public ResponseEntity<Map<String, Object>> crawlAndSavePapers(@RequestBody CrawlerRequest request) {
         try {
             List<Paper> savedPapers = crawlerService.crawlAndSave(request);
-            return ResponseEntity.ok(savedPapers);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("papers", savedPapers);
+            response.put("count", savedPapers.size());
+            response.put("keyword", request.getKeyword());
+            response.put("message", "論文已成功爬取並儲存到資料庫");
+            
+            return ResponseEntity.ok(response);
+            
         } catch (Exception e) {
-            e.printStackTrace();
-            return ResponseEntity.internalServerError().build();
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", e.getMessage());
+            
+            return ResponseEntity.badRequest().body(response);
         }
     }
 
-    // 批量儲存指定的論文
+    @PostMapping("/crawl-batch")
+    public ResponseEntity<Map<String, Object>> crawlBatchPapers(@RequestBody Map<String, Object> request) {
+        try {
+            @SuppressWarnings("unchecked")
+            List<String> keywords = (List<String>) request.get("keywords");
+            Integer maxResultsPerKeyword = (Integer) request.get("maxResultsPerKeyword");
+            
+            if (keywords == null || keywords.isEmpty()) {
+                throw new IllegalArgumentException("關鍵字列表不能為空");
+            }
+            
+            if (maxResultsPerKeyword == null) {
+                maxResultsPerKeyword = 5; // 預設值
+            }
+            
+            List<Paper> papers = crawlerService.crawlBatchGoogleScholar(keywords, maxResultsPerKeyword);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("papers", papers);
+            response.put("count", papers.size());
+            response.put("keywords", keywords);
+            response.put("maxResultsPerKeyword", maxResultsPerKeyword);
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", e.getMessage());
+            
+            return ResponseEntity.badRequest().body(response);
+        }
+    }
+
+    @PostMapping("/crawl-batch-and-save")
+    public ResponseEntity<Map<String, Object>> crawlBatchAndSavePapers(@RequestBody Map<String, Object> request) {
+        try {
+            @SuppressWarnings("unchecked")
+            List<String> keywords = (List<String>) request.get("keywords");
+            Integer maxResultsPerKeyword = (Integer) request.get("maxResultsPerKeyword");
+            
+            if (keywords == null || keywords.isEmpty()) {
+                throw new IllegalArgumentException("關鍵字列表不能為空");
+            }
+            
+            if (maxResultsPerKeyword == null) {
+                maxResultsPerKeyword = 5; // 預設值
+            }
+            
+            List<Paper> savedPapers = crawlerService.crawlBatchAndSave(keywords, maxResultsPerKeyword);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("papers", savedPapers);
+            response.put("count", savedPapers.size());
+            response.put("keywords", keywords);
+            response.put("maxResultsPerKeyword", maxResultsPerKeyword);
+            response.put("message", "批量論文已成功爬取並儲存到資料庫");
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", e.getMessage());
+            
+            return ResponseEntity.badRequest().body(response);
+        }
+    }
+
     @PostMapping("/save-selected")
-    public ResponseEntity<List<Paper>> saveSelectedPapers(@RequestBody List<Paper> papers) {
+    public ResponseEntity<Map<String, Object>> saveSelectedPapers(@RequestBody List<Paper> papers) {
         try {
             List<Paper> savedPapers = crawlerService.saveSelectedPapers(papers);
-            return ResponseEntity.ok(savedPapers);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("papers", savedPapers);
+            response.put("count", savedPapers.size());
+            response.put("message", "選定的論文已成功儲存到資料庫");
+            
+            return ResponseEntity.ok(response);
+            
         } catch (Exception e) {
-            e.printStackTrace();
-            return ResponseEntity.internalServerError().build();
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", e.getMessage());
+            
+            return ResponseEntity.badRequest().body(response);
         }
     }
 
-    // 簡單的爬取測試
-    @GetMapping("/test")
-    public ResponseEntity<String> testCrawler() {
+    @GetMapping("/health")
+    public ResponseEntity<Map<String, Object>> checkHealth() {
         try {
-            CrawlerRequest request = new CrawlerRequest("blockchain", 5);
-            List<Paper> papers = crawlerService.crawlGoogleScholar(request);
-            return ResponseEntity.ok("爬取成功！找到 " + papers.size() + " 篇論文");
+            boolean pythonCrawlerHealthy = crawlerService.isPythonCrawlerHealthy();
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("pythonCrawlerHealthy", pythonCrawlerHealthy);
+            response.put("message", "爬蟲服務健康檢查完成");
+            
+            return ResponseEntity.ok(response);
+            
         } catch (Exception e) {
-            e.printStackTrace();
-            return ResponseEntity.internalServerError().body("爬取失敗：" + e.getMessage());
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", e.getMessage());
+            
+            return ResponseEntity.badRequest().body(response);
         }
     }
 } 
